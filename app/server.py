@@ -69,6 +69,25 @@ def _conv_id(merchant_id: str, trigger_id: str) -> str:
     return f"conv_{merchant_id}__{trigger_id}"
 
 
+# How far out a festival is still "worth messaging about". Beyond this we hold back (restraint).
+FESTIVAL_HORIZON_DAYS = 21
+
+
+def _worth_sending(trigger: dict, now: Optional[datetime]) -> bool:
+    """Lightweight restraint: skip clearly-untimely triggers. Spam is penalized; restraint rewarded."""
+    kind = trigger.get("kind", "")
+    payload = trigger.get("payload") or {}
+
+    if kind in ("festival_upcoming", "festival"):
+        days = payload.get("days_until")
+        if isinstance(days, (int, float)) and days > FESTIVAL_HORIZON_DAYS:
+            return False
+        date = _parse_iso(payload.get("date", ""))
+        if days is None and date and now and (date - now).days > FESTIVAL_HORIZON_DAYS:
+            return False
+    return True
+
+
 # ---------- models ----------
 
 class CtxBody(BaseModel):
@@ -139,6 +158,8 @@ def tick(body: TickBody):
             continue
         if _is_expired(trg, now):
             continue
+        if not _worth_sending(trg, now):
+            continue
         merchant = store.get("merchant", trg.get("merchant_id", ""))
         if not merchant:
             continue
@@ -155,7 +176,11 @@ def tick(body: TickBody):
     candidates.sort(key=lambda c: c[0], reverse=True)
 
     actions: list[dict] = []
+    started_merchants: set[str] = set()
     for _, trg, merchant, category, customer, conv_id in candidates[:MAX_NEW_COMPOSITIONS_PER_TICK]:
+        # Restraint: at most one new outbound per merchant per tick (don't pile on).
+        if merchant["merchant_id"] in started_merchants:
+            continue
         try:
             msg = compose(category, merchant, trg, customer, model=MODEL_FAST)
         except Exception:
@@ -176,6 +201,7 @@ def tick(body: TickBody):
             "rationale": msg["rationale"],
         }
         actions.append(action)
+        started_merchants.add(merchant["merchant_id"])
         if trg.get("suppression_key"):
             sent_suppressions.add(trg["suppression_key"])
         conv = cm.open(

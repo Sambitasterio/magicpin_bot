@@ -23,7 +23,7 @@ Legend: ⬜ Not started · 🟡 Running · ✅ Done · ⛔ Blocked
 | 1 | Composer core (the brain) | ✅ | Done 2026-06-05. 6 case-study tuples eyeballed = strong; 11 tests green; grounding backstop added. |
 | 2 | HTTP server & stores | ✅ | Done 2026-06-05. 22 tests green; live curl push→tick→suppress verified. |
 | 3 | Multi-turn `/v1/reply` | ✅ | Done 2026-06-05. 32 tests green; 3 replay flows eyeballed = strong. |
-| 4 | Adaptive context & restraint | ⬜ | — |
+| 4 | Adaptive context & restraint | ✅ | Done 2026-06-05. 37 tests green; restraint + version-adaptation + grounding verified. |
 | 5 | Submission artifacts | ⬜ | — |
 | 6 | Self-test & iterate | ⬜ | — |
 | 7 | Deploy | ⬜ | — |
@@ -163,9 +163,9 @@ provider/model is swappable from one place (and the judge simulator can be point
 **Commit:** `feat: multi-turn /v1/reply — auto-reply detection, intent handoff, graceful exit`
 
 ### Phase 4 — Adaptive context & restraint
-- [ ] Always compose from the **latest** context version; incorporate mid-test injected digest/perf/triggers/customers.
-- [ ] No hallucination of context that wasn't pushed.
-- [ ] Suppression keys honored across ticks; restraint rewarded (return `[]` when nothing's worth saying).
+- [x] Always compose from the **latest** context version — store returns latest; tick & reply re-fetch each call, so mid-test digest/perf/customer injections flow into the next send. Verified by `test_changed_context_changes_composition` + `test_latest_version_replaces_via_http`.
+- [x] No hallucination — prompt + grounding validator; `test_output_is_grounded` confirms clean output.
+- [x] Suppression honored across ticks (Phase 2) + new restraint: far-off festivals skipped (`FESTIVAL_HORIZON_DAYS=21`) and ≤1 outbound per merchant per tick. → [app/server.py](app/server.py)
 **Done when:** re-composing after a version bump visibly uses the new data; suppressed triggers don't re-fire.
 **Validate:**
 - Push category v2 with a new digest item → next compose references the new item, not the stale one.

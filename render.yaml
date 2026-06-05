@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: vera-bot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /v1/healthz
+    envVars:
+      - key: OPENAI_API_KEY
+        sync: false        # set this in the Render dashboard, do not commit it
+      - key: VERA_MODEL_FAST
+        value: gpt-4o-mini
+      - key: VERA_MODEL_QUALITY
+        value: gpt-4o

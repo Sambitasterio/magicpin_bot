@@ -26,7 +26,7 @@ Legend: ⬜ Not started · 🟡 Running · ✅ Done · ⛔ Blocked
 | 4 | Adaptive context & restraint | ✅ | Done 2026-06-05. 37 tests green; restraint + version-adaptation + grounding verified. |
 | 5 | Submission artifacts | ✅ | Done 2026-06-05. 30-line submission.jsonl clean; 41 tests green. |
 | 6 | Self-test & iterate | ✅ | Done 2026-06-05. Judge "all" passes; sample avg 41.1/50 (all dims ≥7.4); tick parallelized. |
-| 7 | Deploy | ⬜ | — |
+| 7 | Deploy | 🟡 | Started 2026-06-05 |
 
 > Update the Status cell as we move (⬜→🟡→✅). Keep a one-line note (e.g. blocker, key decision, date).
 

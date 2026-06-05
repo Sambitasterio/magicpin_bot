@@ -272,3 +272,11 @@ def teardown():
     sent_suppressions.clear()
     cm.clear()
     return {"ok": True, "wiped": True}
+
+
+if __name__ == "__main__":
+    # Allow `python -m app.server` / `python app/server.py`. Hosts inject PORT.
+    import os
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8080")))

@@ -19,8 +19,8 @@ Legend: ⬜ Not started · 🟡 Running · ✅ Done · ⛔ Blocked
 
 | Phase | Name | Status | Notes |
 |---|---|---|---|
-| 0 | Setup & dataset | ✅ | Done 2026-06-05. Dataset expanded, loader passes. ⚠️ OPENAI_API_KEY not yet set (needed for Phase 1). |
-| 1 | Composer core (the brain) | ⬜ | — |
+| 0 | Setup & dataset | ✅ | Done 2026-06-05. Dataset expanded, loader passes, OpenAI key verified live (gpt-4o-mini). Git initialized. |
+| 1 | Composer core (the brain) | ✅ | Done 2026-06-05. 6 case-study tuples eyeballed = strong; 11 tests green; grounding backstop added. |
 | 2 | HTTP server & stores | ⬜ | — |
 | 3 | Multi-turn `/v1/reply` | ⬜ | — |
 | 4 | Adaptive context & restraint | ⬜ | — |
@@ -106,7 +106,7 @@ provider/model is swappable from one place (and the judge simulator can be point
 - [x] `requirements.txt`: fastapi, uvicorn, openai, pydantic, httpx, python-dotenv.
 - [x] Run generator → 50 merchants, 200 customers, 100 triggers, `test_pairs.json` (30 pairs).
 - [x] Inspect `test_pairs.json` — 30 pairs span all kinds; 9 are customer-facing (T03/04/07/08/13/14/15/28/29).
-- [ ] Confirm `OPENAI_API_KEY` available; wire `.env` loading. *(`.env` loading wired; key still needs to be supplied by user.)*
+- [x] Confirm `OPENAI_API_KEY` available; wire `.env` loading. *(Key supplied in `.env`, gitignored, verified live against gpt-4o-mini.)*
 **Done when:** dataset expanded on disk and we can load any (category, merchant, trigger, customer) tuple in Python.
 **Validate:**
 - `ls data/expanded/merchants | wc -l` → 50; customers → 200; triggers → 100; `test_pairs.json` exists with 30 entries.
@@ -115,13 +115,14 @@ provider/model is swappable from one place (and the judge simulator can be point
 **Commit:** `chore: scaffold vera-bot project and expand challenge dataset`
 
 ### Phase 1 — Composer core (the brain) ★ highest leverage
-- [ ] `compose(category, merchant, trigger, customer=None) -> dict` returning `body, cta, send_as, suppression_key, rationale, template_name, template_params`.
-- [ ] System prompt encoding: role, 5-dimension rubric, compulsion levers, anti-patterns, **no-fabrication rule**, language-mix rules.
-- [ ] Inject only the relevant slices of each context (avoid prompt bloat; resolve `trigger.payload.top_item_id` → the actual digest item).
-- [ ] Dispatch by `trigger.kind` (research_digest vs recall_due vs perf_dip vs competitor_opened …) → framing hints.
-- [ ] `send_as` logic: `vera` when no customer; `merchant_on_behalf` when customer scope.
-- [ ] CTA shape selection: binary for action triggers, none for pure-info, multi-choice allowed for booking flows.
-- [ ] Post-LLM **validator**: reject URLs, enforce CTA shape, check language pref, length sanity, fabrication heuristics (numbers/sources must trace to context). Repair via one re-prompt on failure.
+- [x] `compose(category, merchant, trigger, customer=None) -> dict` returning `body, cta, send_as, suppression_key, rationale, template_name, template_params`. → [app/composer/core.py](app/composer/core.py)
+- [x] System prompt encoding: role, 5-dimension rubric, compulsion levers, anti-patterns, **no-fabrication rule**, language-mix rules. → [app/composer/prompts.py](app/composer/prompts.py)
+- [x] Resolve `trigger.payload` digest references (`top_item_id`/`digest_item_id`/`alert_id`) → full digest item injected.
+- [x] Dispatch by `trigger.kind` → 28 per-kind framing hints (merchant + customer scopes).
+- [x] `send_as` logic: `vera` when no customer; `merchant_on_behalf` when customer scope.
+- [x] CTA enum chosen by model: open_ended / binary_yes_no / binary_confirm_cancel / multi_choice_slot / none.
+- [x] Post-LLM **validator** + one repair pass: URLs, CTA shape, send_as, empty body, stacked-CTA, **percentage + named-source grounding** against the contexts. → [app/composer/validate.py](app/composer/validate.py)
+- ⚠️ Known limitation: grounding is heuristic — coincidental digits pass, and cross-item source mis-attribution isn't caught. Revisit in Phase 4.
 **Done when:** composing for the 10 case-study tuples produces output of comparable shape/quality (eyeball vs `case-studies.md`), deterministic across runs.
 **Validate:**
 - Run composer on the Dr. Meera research-digest tuple → output has source citation, her cohort, open-ended CTA; compare to Case Study 1.

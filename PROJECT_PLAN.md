@@ -26,7 +26,7 @@ Legend: ⬜ Not started · 🟡 Running · ✅ Done · ⛔ Blocked
 | 4 | Adaptive context & restraint | ✅ | Done 2026-06-05. 37 tests green; restraint + version-adaptation + grounding verified. |
 | 5 | Submission artifacts | ✅ | Done 2026-06-05. 30-line submission.jsonl clean; 41 tests green. |
 | 6 | Self-test & iterate | ✅ | Done 2026-06-05. Judge "all" passes; sample avg 41.1/50 (all dims ≥7.4); tick parallelized. |
-| 7 | Deploy | 🟡 | Started 2026-06-05 |
+| 7 | Deploy | ✅ | Live on Render: https://vera-bot-kkqj.onrender.com — healthz/metadata/tick/reply all verified in prod. |
 
 > Update the Status cell as we move (⬜→🟡→✅). Keep a one-line note (e.g. blocker, key decision, date).
 
@@ -205,9 +205,11 @@ provider/model is swappable from one place (and the judge simulator can be point
 **Commit:** `test: judge-simulator pass and latency tuning`
 
 ### Phase 7 — Deploy
-- [ ] Expose public URL (ngrok for testing; cloud for submission).
-- [ ] Confirm reachable `https://<host>/v1/*`, healthz green, metadata correct.
-- [ ] Load/quota check so the bot survives the full 60-min window at ≤10 req/s.
+- [x] Public URL on Render (Blueprint via `render.yaml`): **https://vera-bot-kkqj.onrender.com**
+- [x] Reachable `/v1/*`: healthz green, metadata correct, push→tick→reply verified in prod (OpenAI key wired on host).
+- [x] Deploy artifacts: [Procfile](Procfile), [Dockerfile](Dockerfile), [.dockerignore](.dockerignore), [render.yaml](render.yaml), `PORT` support in server.
+- ⚠️ Free tier sleeps after ~15 min idle (cold start ~30-50s) — **warm the URL right before the judge window**; consider paid always-on for a graded run.
+- ⚠️ Rotate the OpenAI key (it was exposed in chat); update `.env` + Render env var.
 **Done when:** public URL passes warmup from an external caller.
 **Validate:**
 - From a different network, `curl https://<host>/v1/healthz` → 200; `/v1/metadata` correct.

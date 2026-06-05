@@ -21,7 +21,7 @@ Legend: ⬜ Not started · 🟡 Running · ✅ Done · ⛔ Blocked
 |---|---|---|---|
 | 0 | Setup & dataset | ✅ | Done 2026-06-05. Dataset expanded, loader passes, OpenAI key verified live (gpt-4o-mini). Git initialized. |
 | 1 | Composer core (the brain) | ✅ | Done 2026-06-05. 6 case-study tuples eyeballed = strong; 11 tests green; grounding backstop added. |
-| 2 | HTTP server & stores | ⬜ | — |
+| 2 | HTTP server & stores | ✅ | Done 2026-06-05. 22 tests green; live curl push→tick→suppress verified. |
 | 3 | Multi-turn `/v1/reply` | ⬜ | — |
 | 4 | Adaptive context & restraint | ⬜ | — |
 | 5 | Submission artifacts | ⬜ | — |
@@ -132,10 +132,11 @@ provider/model is swappable from one place (and the judge simulator can be point
 **Commit:** `feat: composer core — LLM message composition with kind dispatch and validator`
 
 ### Phase 2 — HTTP server & stores
-- [ ] `ContextStore`: idempotent by `(scope, context_id)`, version replaces atomically, 409 on stale, 400 on malformed. `contexts_loaded` counts for healthz.
-- [ ] `/v1/context`, `/v1/healthz`, `/v1/metadata` per `api-call-examples.md` exact schemas.
-- [ ] `/v1/tick`: read `available_triggers`, apply suppression/dedup, pick worthwhile subset (restraint!), compose ≤20 actions, unique `conversation_id` per (merchant, trigger). Return fast (<10s) — return `[]` rather than blow the budget.
-- [ ] `/v1/teardown`: wipe state.
+- [x] `ContextStore`: idempotent by `(scope, context_id)`, version replaces atomically, stale rejected, invalid scope rejected. `contexts_loaded` counts for healthz. → [app/store/context_store.py](app/store/context_store.py)
+- [x] `/v1/context`, `/v1/healthz`, `/v1/metadata` per `api-call-examples.md` schemas. → [app/server.py](app/server.py)
+- [x] `/v1/tick`: suppression/expiry/active-conv dedup, urgency-sorted, compose-budget cap (5 new/tick) + 20 action cap, unique `conversation_id` per (merchant, trigger), `[]` when nothing worthwhile.
+- [x] `/v1/teardown`: wipe state.
+- Note: `/v1/reply` is a stub here (ends conversation) — fleshed out in Phase 3.
 **Done when:** all examples in `api-call-examples.md` pass via curl; warmup (255 contexts) reflects correct counts.
 **Validate:**
 - Push all 255 base contexts → `GET /v1/healthz` shows `{category:5, merchant:50, customer:200, trigger:0}`.

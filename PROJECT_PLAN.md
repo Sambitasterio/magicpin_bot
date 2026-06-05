@@ -22,7 +22,7 @@ Legend: ⬜ Not started · 🟡 Running · ✅ Done · ⛔ Blocked
 | 0 | Setup & dataset | ✅ | Done 2026-06-05. Dataset expanded, loader passes, OpenAI key verified live (gpt-4o-mini). Git initialized. |
 | 1 | Composer core (the brain) | ✅ | Done 2026-06-05. 6 case-study tuples eyeballed = strong; 11 tests green; grounding backstop added. |
 | 2 | HTTP server & stores | ✅ | Done 2026-06-05. 22 tests green; live curl push→tick→suppress verified. |
-| 3 | Multi-turn `/v1/reply` | ⬜ | — |
+| 3 | Multi-turn `/v1/reply` | ✅ | Done 2026-06-05. 32 tests green; 3 replay flows eyeballed = strong. |
 | 4 | Adaptive context & restraint | ⬜ | — |
 | 5 | Submission artifacts | ⬜ | — |
 | 6 | Self-test & iterate | ⬜ | — |
@@ -146,13 +146,14 @@ provider/model is swappable from one place (and the judge simulator can be point
 **Commit:** `feat: FastAPI server with versioned context store and /v1/tick composition`
 
 ### Phase 3 — Multi-turn conversation handling (`/v1/reply`)
-- [ ] `ConversationManager`: per-`conversation_id` turn log + state machine.
-- [ ] **Auto-reply detection:** canned-phrase heuristics + same body verbatim ≥2–3× → back off (`wait`) then `end`.
-- [ ] **Intent transition:** explicit "yes/let's do it/go ahead" → switch from qualify to action immediately (`send` concrete next step).
-- [ ] **Graceful exit:** hard "no"/opt-out/hostile → `end`, suppress conversation/merchant.
-- [ ] **Off-topic curveball:** politely decline + redirect to original trigger (`send`).
-- [ ] **Anti-repetition guard:** never resend a `body` already sent in this conversation.
-- [ ] `wait` with sensible `wait_seconds` backoff.
+- [x] `ConversationManager`: per-`conversation_id` turn log + state machine. → [app/store/conversation.py](app/store/conversation.py)
+- [x] **Auto-reply detection:** canned-phrase + verbatim-repeat → flag once (`send`) → `wait` 24h → `end`. → [app/composer/reply.py](app/composer/reply.py)
+- [x] **Intent transition:** explicit accept → directive switches the LLM from qualify to execute (delivers ready artifact).
+- [x] **Graceful exit:** opt-out/hostile → deterministic `end` + suppress the originating trigger.
+- [x] **Off-topic curveball:** LLM declines out-of-scope + redirects to the thread (verified on GST curveball).
+- [x] **Anti-repetition guard:** `Conversation.has_said()` + one re-prompt if the model would resend a body.
+- [x] `wait` with sensible `wait_seconds` backoff (auto-reply 24h; LLM-chosen otherwise).
+- Hybrid design: deterministic control on opt-out/auto-reply (reliable flow score), LLM for accept/engaged/off-topic.
 **Done when:** the 3 replay scenarios (auto-reply hell, intent transition, hostile/off-topic) in `api-call-examples.md` behave correctly.
 **Validate:**
 - Auto-reply hell: same canned reply ×4 → `send`(flag) → `wait` → `end` (no infinite engagement).

@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 
 from .composer.core import compose
-from .composer.reply import classify, compose_reply
+from .composer.reply import handle_turn
 from .config import MODEL_FAST
 from .store.context_store import VALID_SCOPES, ContextStore
 from .store.conversation import ConversationManager
@@ -25,11 +25,6 @@ START = time.time()
 store = ContextStore()
 cm = ConversationManager()
 sent_suppressions: set[str] = set()
-
-AUTO_REPLY_FLAG = (
-    "Looks like an auto-reply 😊 No rush — when you (the owner) see this, just reply YES "
-    "and I'll pick up where we left off."
-)
 
 # Per-tick cap on NEW compositions (cached ones are effectively free). Keeps /v1/tick within budget.
 MAX_NEW_COMPOSITIONS_PER_TICK = 5
@@ -227,56 +222,19 @@ def reply(body: ReplyBody):
         return {"action": "end", "rationale": "No open conversation for this id."}
 
     conv.add_turn(body.from_role, body.message)
-    cls = classify(body.message, conv)
-
-    # Opt-out / hostile -> end + suppress the originating trigger.
-    if cls in ("opt_out", "hostile"):
-        cm.end(conv.conversation_id)
-        if conv.suppression_key:
-            sent_suppressions.add(conv.suppression_key)
-        rationale = (
-            "Merchant explicitly opted out; closing and suppressing this thread."
-            if cls == "opt_out"
-            else "Merchant frustration explicit; closing gracefully without further engagement."
-        )
-        return {"action": "end", "rationale": rationale}
-
-    # Auto-reply -> flag once, then back off, then end.
-    if cls == "auto_reply":
-        conv.auto_reply_count += 1
-        n = conv.auto_reply_count
-        if n == 1:
-            conv.add_turn("bot", AUTO_REPLY_FLAG)
-            return {"action": "send", "body": AUTO_REPLY_FLAG, "cta": "binary_yes_no",
-                    "rationale": "Detected an auto-reply; one explicit prompt to flag it for the owner."}
-        if n == 2:
-            return {"action": "wait", "wait_seconds": 86400,
-                    "rationale": "Same auto-reply again — owner not at the phone. Backing off 24h."}
-        cm.end(conv.conversation_id)
-        return {"action": "end",
-                "rationale": "Auto-reply repeated with no real engagement signal; closing."}
-
-    # accept / general -> LLM-composed next move.
-    directive = (
-        "The merchant has explicitly agreed/committed. Switch from qualifying to executing NOW: "
-        "deliver the concrete next step or ready artifact with one low-friction confirmation."
-        if cls == "accept"
-        else "Continue the conversation appropriately (answer, redirect off-topic, or close if done)."
-    )
     category = store.get("category", conv.category_slug) or {}
     merchant = store.get("merchant", conv.merchant_id) or {}
     customer = store.get("customer", conv.customer_id) if conv.customer_id else None
 
     try:
-        result = compose_reply(category, merchant, customer, conv, body.message, directive)
+        result, cls = handle_turn(conv, body.message, category, merchant, customer, model=MODEL_FAST)
     except Exception:
         cm.end(conv.conversation_id)
         return {"action": "end", "rationale": "Failed to compose a reply; closing safely."}
 
-    if result["action"] == "send" and result.get("body"):
-        conv.add_turn("bot", result["body"])
-    elif result["action"] == "end":
-        cm.end(conv.conversation_id)
+    # Opt-out / hostile -> also suppress the originating trigger so tick won't re-engage.
+    if cls in ("opt_out", "hostile") and conv.suppression_key:
+        sent_suppressions.add(conv.suppression_key)
     return result
 
 

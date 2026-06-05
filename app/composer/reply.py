@@ -39,6 +39,11 @@ _ACCEPT = [
 ]
 _SHORT_AFFIRM = {"yes", "ok", "okay", "sure", "haan", "han", "yep", "yes.", "ok.", "👍", "done"}
 
+AUTO_REPLY_FLAG = (
+    "Looks like an auto-reply 😊 No rush — when you (the owner) see this, just reply YES "
+    "and I'll pick up where we left off."
+)
+
 
 def _contains(text: str, needles: list[str]) -> bool:
     return any(n in text for n in needles)
@@ -158,3 +163,48 @@ def compose_reply(category, merchant, customer, conv: Conversation, latest: str,
     elif action == "wait":
         out["wait_seconds"] = int(result.get("wait_seconds") or 3600)
     return out
+
+
+def handle_turn(conv: Conversation, message: str, category, merchant, customer,
+                model: str = MODEL_FAST) -> tuple[dict, str]:
+    """Route one inbound turn to an action. Mutates `conv` (ends it, increments auto-reply count,
+    appends bot turns). Returns (action_dict, classification). The inbound turn must already be
+    appended to `conv` by the caller. Shared by the server and conversation_handlers.respond.
+    """
+    cls = classify(message, conv)
+
+    if cls in ("opt_out", "hostile"):
+        conv.status = "ended"
+        rationale = (
+            "Merchant explicitly opted out; closing and suppressing this thread."
+            if cls == "opt_out"
+            else "Merchant frustration explicit; closing gracefully without further engagement."
+        )
+        return {"action": "end", "rationale": rationale}, cls
+
+    if cls == "auto_reply":
+        conv.auto_reply_count += 1
+        n = conv.auto_reply_count
+        if n == 1:
+            conv.add_turn("bot", AUTO_REPLY_FLAG)
+            return ({"action": "send", "body": AUTO_REPLY_FLAG, "cta": "binary_yes_no",
+                     "rationale": "Detected an auto-reply; one explicit prompt to flag it for the owner."}, cls)
+        if n == 2:
+            return ({"action": "wait", "wait_seconds": 86400,
+                     "rationale": "Same auto-reply again — owner not at the phone. Backing off 24h."}, cls)
+        conv.status = "ended"
+        return ({"action": "end",
+                 "rationale": "Auto-reply repeated with no real engagement signal; closing."}, cls)
+
+    directive = (
+        "The merchant has explicitly agreed/committed. Switch from qualifying to executing NOW: "
+        "deliver the concrete next step or ready artifact with one low-friction confirmation."
+        if cls == "accept"
+        else "Continue the conversation appropriately (answer, redirect off-topic, or close if done)."
+    )
+    result = compose_reply(category or {}, merchant or {}, customer, conv, message, directive, model=model)
+    if result["action"] == "send" and result.get("body"):
+        conv.add_turn("bot", result["body"])
+    elif result["action"] == "end":
+        conv.status = "ended"
+    return result, cls

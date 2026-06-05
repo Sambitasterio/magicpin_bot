@@ -24,7 +24,7 @@ Legend: ⬜ Not started · 🟡 Running · ✅ Done · ⛔ Blocked
 | 2 | HTTP server & stores | ✅ | Done 2026-06-05. 22 tests green; live curl push→tick→suppress verified. |
 | 3 | Multi-turn `/v1/reply` | ✅ | Done 2026-06-05. 32 tests green; 3 replay flows eyeballed = strong. |
 | 4 | Adaptive context & restraint | ✅ | Done 2026-06-05. 37 tests green; restraint + version-adaptation + grounding verified. |
-| 5 | Submission artifacts | ⬜ | — |
+| 5 | Submission artifacts | ✅ | Done 2026-06-05. 30-line submission.jsonl clean; 41 tests green. |
 | 6 | Self-test & iterate | ⬜ | — |
 | 7 | Deploy | ⬜ | — |
 
@@ -175,11 +175,12 @@ provider/model is swappable from one place (and the judge simulator can be point
 **Commit:** `feat: adaptive context handling and suppression-aware restraint`
 
 ### Phase 5 — Submission artifacts
-- [ ] `bot.py` exposing `compose(category, merchant, trigger, customer)` (thin wrapper on the core).
-- [ ] `build_submission.py` → `submission.jsonl` (30 lines, one per test pair from `test_pairs.json`).
-- [ ] `conversation_handlers.py` with `respond(state, merchant_message)` (multi-turn tiebreaker).
-- [ ] `README.md` (1 page): approach, tradeoffs, what extra context would have helped.
-- [ ] Fill `/v1/metadata` (team name, model, approach, contact).
+- [x] `bot.py` exposing `compose(category, merchant, trigger, customer)` (thin wrapper on the core). → [bot.py](bot.py)
+- [x] `scripts/build_submission.py` → `submission.jsonl` (30 lines, quality model). → [submission.jsonl](submission.jsonl)
+- [x] `conversation_handlers.py` with `respond(state, merchant_message)` — shares `handle_turn` with the server. → [conversation_handlers.py](conversation_handlers.py)
+- [x] `README.md` (1 page): approach, tradeoffs, what extra context would have helped. → [README.md](README.md)
+- [x] `/v1/metadata` filled (set in Phase 2).
+- Refactor: reply routing centralized in `reply.handle_turn`, used by both server and handlers.
 **Done when:** `submission.jsonl` has 30 valid lines; artifacts self-consistent with the live server.
 **Validate:**
 - `wc -l submission.jsonl` → 30; each line parses as JSON with keys `test_id, body, cta, send_as, suppression_key, rationale`.

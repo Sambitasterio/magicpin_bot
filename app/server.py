@@ -7,6 +7,7 @@ placeholder here and is fleshed out in Phase 3.
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -167,22 +168,39 @@ def tick(body: TickBody):
         customer = store.get("customer", trg["customer_id"]) if trg.get("customer_id") else None
         candidates.append((int(trg.get("urgency", 1)), trg, merchant, category, customer, conv_id))
 
-    # Highest urgency first; cap new compositions for latency.
+    # Highest urgency first, then restraint: at most one outbound per merchant per tick.
     candidates.sort(key=lambda c: c[0], reverse=True)
+    selected: list[tuple] = []
+    seen_merchants: set[str] = set()
+    for cand in candidates:
+        mid = cand[2]["merchant_id"]
+        if mid in seen_merchants:
+            continue
+        seen_merchants.add(mid)
+        selected.append(cand)
+        if len(selected) >= min(MAX_NEW_COMPOSITIONS_PER_TICK, ACTION_CAP):
+            break
 
-    actions: list[dict] = []
-    started_merchants: set[str] = set()
-    for _, trg, merchant, category, customer, conv_id in candidates[:MAX_NEW_COMPOSITIONS_PER_TICK]:
-        # Restraint: at most one new outbound per merchant per tick (don't pile on).
-        if merchant["merchant_id"] in started_merchants:
-            continue
+    # Compose the selected set concurrently so wall-time stays ~one composition, not the sum.
+    def _do(cand):
+        _, trg, merchant, category, customer, conv_id = cand
         try:
-            msg = compose(category, merchant, trg, customer, model=MODEL_FAST)
+            return cand, compose(category, merchant, trg, customer, model=MODEL_FAST)
         except Exception:
+            return cand, None
+
+    results = []
+    if selected:
+        with ThreadPoolExecutor(max_workers=len(selected)) as pool:
+            results = list(pool.map(_do, selected))
+
+    # Assemble actions serially (urgency order preserved) and record state.
+    actions: list[dict] = []
+    for cand, msg in results:
+        if not msg or not msg.get("body"):
             continue
-        if not msg.get("body"):
-            continue
-        action = {
+        _, trg, merchant, category, customer, conv_id = cand
+        actions.append({
             "conversation_id": conv_id,
             "merchant_id": merchant["merchant_id"],
             "customer_id": customer["customer_id"] if customer else None,
@@ -194,9 +212,7 @@ def tick(body: TickBody):
             "cta": msg["cta"],
             "suppression_key": msg["suppression_key"],
             "rationale": msg["rationale"],
-        }
-        actions.append(action)
-        started_merchants.add(merchant["merchant_id"])
+        })
         if trg.get("suppression_key"):
             sent_suppressions.add(trg["suppression_key"])
         conv = cm.open(
@@ -209,8 +225,6 @@ def tick(body: TickBody):
             suppression_key=msg["suppression_key"],
         )
         conv.add_turn("bot", msg["body"])
-        if len(actions) >= ACTION_CAP:
-            break
 
     return {"actions": actions}
 
@@ -218,8 +232,22 @@ def tick(body: TickBody):
 @app.post("/v1/reply")
 def reply(body: ReplyBody):
     conv = cm.get(body.conversation_id)
-    if conv is None or conv.status != "open":
-        return {"action": "end", "rationale": "No open conversation for this id."}
+    if conv is None:
+        # Cold start (replay-style reply with no prior tick). Open lazily if the merchant is known.
+        merchant_ctx = store.get("merchant", body.merchant_id or "")
+        if not merchant_ctx:
+            return {"action": "end", "rationale": "No open conversation and unknown merchant; nothing to continue."}
+        conv = cm.open(
+            conversation_id=body.conversation_id,
+            merchant_id=merchant_ctx["merchant_id"],
+            category_slug=merchant_ctx.get("category_slug", ""),
+            send_as="merchant_on_behalf" if body.customer_id else "vera",
+            trigger_id="",
+            customer_id=body.customer_id,
+            suppression_key="",
+        )
+    elif conv.status != "open":
+        return {"action": "end", "rationale": "Conversation already closed."}
 
     conv.add_turn(body.from_role, body.message)
     category = store.get("category", conv.category_slug) or {}

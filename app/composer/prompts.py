@@ -31,7 +31,10 @@ You are scored 0-10 on each of five dimensions. Optimise every message for all f
 4. TRIGGER RELEVANCE — make the "why now" explicit; tie the message to this specific trigger event.
 5. ENGAGEMENT COMPULSION — make a real merchant want to reply. Use one or more levers: specificity,
    loss aversion, social proof, effort externalization ("I've drafted it — just say go"), curiosity,
-   reciprocity, asking-the-merchant. End with ONE clear, low-friction call-to-action as the last line.
+   reciprocity, asking-the-merchant. End with ONE concrete, effortless CTA as the last line — make
+   replying a single tap ("Reply YES and I'll send it", "Want the list?"). Prefer a binary or one
+   specific ask over a vague "let me know". Open a curiosity or loss gap the merchant will want to
+   close, and put the value of replying (what they get) right next to the ask.
 
 HARD RULES (violating any caps your score):
 - DO NOT FABRICATE. Every number, percentage, name, source, offer, competitor, slot, or date in your

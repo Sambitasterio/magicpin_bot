@@ -25,7 +25,7 @@ Legend: ⬜ Not started · 🟡 Running · ✅ Done · ⛔ Blocked
 | 3 | Multi-turn `/v1/reply` | ✅ | Done 2026-06-05. 32 tests green; 3 replay flows eyeballed = strong. |
 | 4 | Adaptive context & restraint | ✅ | Done 2026-06-05. 37 tests green; restraint + version-adaptation + grounding verified. |
 | 5 | Submission artifacts | ✅ | Done 2026-06-05. 30-line submission.jsonl clean; 41 tests green. |
-| 6 | Self-test & iterate | ⬜ | — |
+| 6 | Self-test & iterate | ✅ | Done 2026-06-05. Judge "all" passes; sample avg 41.1/50 (all dims ≥7.4); tick parallelized. |
 | 7 | Deploy | ⬜ | — |
 
 > Update the Status cell as we move (⬜→🟡→✅). Keep a one-line note (e.g. blocker, key decision, date).
@@ -190,10 +190,12 @@ provider/model is swappable from one place (and the judge simulator can be point
 **Commit:** `feat: submission artifacts — bot.py, submission.jsonl, handlers, README`
 
 ### Phase 6 — Self-test & iterate
-- [ ] Curl smoke tests against all 5 endpoints.
-- [ ] Run `python ../judge_simulator.py` (provider=openai) against local server; iterate on low-scoring dimensions.
-- [ ] Latency check: tick <10s, reply <30s; trim prompt or switch model if over.
-- [ ] Verify failure modes don't trip penalties (URLs, repetition, malformed, empty body).
+- [x] Curl smoke tests against all 5 endpoints (Phase 2 + here).
+- [x] Judge simulator `all` scenario passes (warmup/auto-reply/intent/hostile) → [scripts/run_judge.py](scripts/run_judge.py). Fixed lazy-open of cold-start reply conversations.
+- [x] Per-dimension scores via official `LLMScorer` on 9 representative pairs → [scripts/score_samples.py](scripts/score_samples.py): **avg 41.1/50 (82%)**; specificity 8.3, category 9.0, merchant 8.6, decision 7.8, engagement 7.4.
+- [x] Fix pass on weakest dim (engagement): sharpened closing-CTA guidance → 7.2→7.4, no message below 7; rebuilt submission.jsonl.
+- [x] Latency: tick 3.8s (1 cold) / 6.0s (3 cold, parallelized); reply 2.6s; healthz 1.6ms — all under budget. Tick now composes concurrently (ThreadPoolExecutor).
+- [x] No penalties: submission re-validated (no URLs, no dupes, correct send_as, valid CTAs).
 **Done when:** judge simulator returns strong non-zero scores across all 5 dimensions on representative pairs.
 **Validate:**
 - `python ../judge_simulator.py` (provider=openai) runs end-to-end; record per-dimension scores.
